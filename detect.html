@@ -1,229 +1,200 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>Weiqi Board Aligned Grid Detection – OpenCV.js</title>
-<style>
-body { margin:0; padding:8px; font-family:Arial,sans-serif; background:#f2f2f2; }
-h1 {
-  color: #333;
-}
-p {
-  font-size: 1.05em;
-  color: #444;
-}
-a {
-  color: #0088cc;
-  text-decoration: none;
-}
-a:hover {
-  text-decoration: underline;
-}
-.controls { margin-bottom:6px; }
-button { margin:3px; padding:6px 10px; font-size:14px; }
-canvas { display:block; margin:auto; border:1px solid #333; background:white; }
-#output { margin-top:8px; padding:6px; background:#fff; border:1px solid #999; font-size:14px; }
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Detect Weiqi Board – OpenCV.js</title>
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-<div class="controls">
+  <!-- Navigation bar -->
+  <nav>
+    <a href="index.html">Home</a>
+    <a href="physics.html">Physics</a>
+    <a href="about.html">About</a>
+  </nav>
+
   <h1>Detect Weiqi Board</h1>
-  <input type="file" id="fileInput" accept="image/*"><br>
-  <button onclick="toGray()">Grayscale</button>
-  <button onclick="detectBoard()">Detect Board</button>
-  <button onclick="resetImage()">Reset</button>
-</div>
 
-<canvas id="canvas"></canvas>
-<div id="output"></div>
-  <p>
-    <a href="index.html">← Back to Home</a>
-  </p>
+  <div class="container controls">
+    <input type="file" id="fileInput" accept="image/*">
+    <button onclick="toGray()">Grayscale</button>
+    <button onclick="detectBoard()">Detect Board</button>
+    <button onclick="resetImage()">Reset</button>
+  </div>
 
-<script async src="https://docs.opencv.org/4.x/opencv.js"></script>
+  <canvas id="canvas"></canvas>
+  <div id="output"></div>
 
-<script>
-let canvas = document.getElementById("canvas");
-let ctx = canvas.getContext("2d");
-let sourceImage = null;
-let baseMat = null;
-let overlayMat = null;
+  <footer>
+    &copy; 2025 hongwaiwan
+  </footer>
 
-// Stone and grid info
-let circleCenters = [];
-let gridRows = [];
-let gridCols = [];
-let gridSize = 19; // default 19x19, can switch to 13 or 9
+  <script async src="https://docs.opencv.org/4.x/opencv.js"></script>
+  <script>
+    // ---------- Your existing OpenCV.js script ----------
+    let canvas = document.getElementById("canvas");
+    let ctx = canvas.getContext("2d");
+    let sourceImage = null;
+    let baseMat = null;
+    let overlayMat = null;
 
-function updateOutput(rows, cols, stones, intersections){
-  document.getElementById("output").innerHTML =
-    `Horizontal lines: ${rows}<br>`+
-    `Vertical lines: ${cols}<br>`+
-    `Stones: ${stones}<br>`+
-    `Intersections: ${intersections}`;
-}
+    let circleCenters = [];
+    let gridRows = [];
+    let gridCols = [];
+    let gridSize = 19;
 
-// ---------- Canvas scaling ----------
-function scaleFor(w,h){
-  return Math.min((window.innerWidth-20)/w, (window.innerHeight-220)/h,1);
-}
-
-function drawImage(img){
-  let s = scaleFor(img.width,img.height);
-  canvas.width = Math.floor(img.width*s);
-  canvas.height = Math.floor(img.height*s);
-  ctx.drawImage(img,0,0,canvas.width,canvas.height);
-}
-
-// ---------- Load image ----------
-document.getElementById("fileInput").addEventListener("change",e=>{
-  let f=e.target.files[0]; if(!f) return;
-  sourceImage=new Image();
-  sourceImage.onload=()=>{
-    drawImage(sourceImage);
-    if(baseMat) baseMat.delete();
-    if(overlayMat) overlayMat.delete();
-    baseMat=cv.imread(canvas);
-    overlayMat=baseMat.clone();
-    circleCenters=[]; gridRows=[]; gridCols=[];
-    updateOutput(0,0,0,0);
-    cv.imshow("canvas",overlayMat);
-  };
-  sourceImage.src=URL.createObjectURL(f);
-});
-
-// ---------- Reset ----------
-function resetImage(){
-  if(!sourceImage) return;
-  drawImage(sourceImage);
-  if(baseMat) baseMat.delete();
-  if(overlayMat) overlayMat.delete();
-  baseMat=cv.imread(canvas);
-  overlayMat=baseMat.clone();
-  circleCenters=[]; gridRows=[]; gridCols=[];
-  updateOutput(0,0,0,0);
-  cv.imshow("canvas",overlayMat);
-}
-
-// ---------- Grayscale ----------
-function toGray(){
-  if(!baseMat) return;
-  let g=new cv.Mat();
-  cv.cvtColor(baseMat,g,cv.COLOR_RGBA2GRAY);
-  cv.cvtColor(g,baseMat,cv.COLOR_GRAY2RGBA);
-  g.delete();
-  if(overlayMat) overlayMat.delete();
-  overlayMat=baseMat.clone();
-  cv.imshow("canvas",overlayMat);
-}
-
-// ---------- Detect stones ----------
-function detectStones(){
-  if(!baseMat) return [];
-  let gray=new cv.Mat();
-  let circles=new cv.Mat();
-  circleCenters=[];
-
-  cv.cvtColor(baseMat,gray,cv.COLOR_RGBA2GRAY);
-  cv.medianBlur(gray,gray,5);
-  cv.HoughCircles(gray,circles,cv.HOUGH_GRADIENT,1,25,100,30,10,40);
-
-  for(let i=0;i<circles.cols;i++){
-    let x=circles.data32F[i*3];
-    let y=circles.data32F[i*3+1];
-    circleCenters.push({x,y});
-  }
-
-  gray.delete(); circles.delete();
-  return circleCenters;
-}
-
-// ---------- Generate aligned grid ----------
-function generateAlignedGrid(N){
-  if(circleCenters.length===0) return;
-
-  // Find outermost stones
-  let xs=circleCenters.map(s=>s.x);
-  let ys=circleCenters.map(s=>s.y);
-  let xmin=Math.min(...xs);
-  let xmax=Math.max(...xs);
-  let ymin=Math.min(...ys);
-  let ymax=Math.max(...ys);
-
-  let rowSpacing = (ymax - ymin)/(N-1);
-  let colSpacing = (xmax - xmin)/(N-1);
-
-  gridRows=[]; gridCols=[];
-  for(let i=0;i<N;i++){
-    gridRows.push(ymin + i*rowSpacing);
-    gridCols.push(xmin + i*colSpacing);
-  }
-
-  // Snap stones to nearest grid points
-  for(let s of circleCenters){
-    let nearestRow = gridRows.reduce((a,b)=>Math.abs(b-s.y)<Math.abs(a-s.y)?b:a);
-    let nearestCol = gridCols.reduce((a,b)=>Math.abs(b-s.x)<Math.abs(a-s.x)?b:a);
-    s.snapped = {x: nearestCol, y: nearestRow};
-  }
-}
-
-// ---------- Draw grid and stones ----------
-function drawAlignedGrid(){
-  if(!baseMat) return;
-  if(overlayMat) overlayMat.delete();
-  overlayMat=baseMat.clone();
-
-  let intersections=[];
-  let xmin = gridCols[0];
-  let xmax = gridCols[gridCols.length-1];
-  let ymin = gridRows[0];
-  let ymax = gridRows[gridRows.length-1];
-
-  // Draw intersections
-  for(let y of gridRows){
-    for(let x of gridCols){
-      intersections.push({x,y});
-      cv.circle(overlayMat,new cv.Point(x,y),3,new cv.Scalar(180,0,180,255),-1); // purple
+    function updateOutput(rows, cols, stones, intersections){
+      document.getElementById("output").innerHTML =
+        `Horizontal lines: ${rows}<br>`+
+        `Vertical lines: ${cols}<br>`+
+        `Stones: ${stones}<br>`+
+        `Intersections: ${intersections}`;
     }
-  }
 
-  // Draw horizontal lines only within board
-  for(let y of gridRows)
-    cv.line(overlayMat,new cv.Point(xmin,y),new cv.Point(xmax,y),new cv.Scalar(0,255,0,255),1);
-  // Draw vertical lines only within board
-  for(let x of gridCols)
-    cv.line(overlayMat,new cv.Point(x,ymin),new cv.Point(x,ymax),new cv.Scalar(0,0,255,255),1);
+    function scaleFor(w,h){
+      return Math.min((window.innerWidth-40)/w, (window.innerHeight-300)/h,1);
+    }
 
-  // Draw stones
-  for(let s of circleCenters){
-    let pt = s.snapped || s;
-    cv.circle(overlayMat,new cv.Point(pt.x,pt.y),10,new cv.Scalar(255,0,0,255),2);
-  }
+    function drawImage(img){
+      let s = scaleFor(img.width,img.height);
+      canvas.width = Math.floor(img.width*s);
+      canvas.height = Math.floor(img.height*s);
+      ctx.drawImage(img,0,0,canvas.width,canvas.height);
+    }
 
-  cv.imshow("canvas",overlayMat);
-  updateOutput(gridRows.length, gridCols.length, circleCenters.length, intersections.length);
-}
+    document.getElementById("fileInput").addEventListener("change", e=>{
+      let f = e.target.files[0]; if(!f) return;
+      sourceImage = new Image();
+      sourceImage.onload = ()=>{
+        drawImage(sourceImage);
+        if(baseMat) baseMat.delete();
+        if(overlayMat) overlayMat.delete();
+        baseMat = cv.imread(canvas);
+        overlayMat = baseMat.clone();
+        circleCenters=[]; gridRows=[]; gridCols=[];
+        updateOutput(0,0,0,0);
+        cv.imshow("canvas", overlayMat);
+      };
+      sourceImage.src = URL.createObjectURL(f);
+    });
 
-// ---------- Detect Board ----------
-function detectBoard(){
-  detectStones();
-  if(circleCenters.length===0) return;
-  generateAlignedGrid(gridSize);
-  drawAlignedGrid();
-}
+    function resetImage(){
+      if(!sourceImage) return;
+      drawImage(sourceImage);
+      if(baseMat) baseMat.delete();
+      if(overlayMat) overlayMat.delete();
+      baseMat = cv.imread(canvas);
+      overlayMat = baseMat.clone();
+      circleCenters=[]; gridRows=[]; gridCols=[];
+      updateOutput(0,0,0,0);
+      cv.imshow("canvas", overlayMat);
+    }
 
-// ---------- Resize ----------
-window.addEventListener("resize",()=>{
-  if(!sourceImage || !baseMat) return;
-  drawImage(sourceImage);
-  let resized=cv.imread(canvas);
-  cv.resize(baseMat,resized,resized.size());
-  baseMat.delete(); baseMat=resized;
-  if(overlayMat) overlayMat.delete();
-  overlayMat=baseMat.clone();
-  cv.imshow("canvas",overlayMat);
-});
-</script>
+    function toGray(){
+      if(!baseMat) return;
+      let g = new cv.Mat();
+      cv.cvtColor(baseMat,g,cv.COLOR_RGBA2GRAY);
+      cv.cvtColor(g,baseMat,cv.COLOR_GRAY2RGBA);
+      g.delete();
+      if(overlayMat) overlayMat.delete();
+      overlayMat = baseMat.clone();
+      cv.imshow("canvas", overlayMat);
+    }
+
+    function detectStones(){
+      if(!baseMat) return [];
+      let gray=new cv.Mat();
+      let circles=new cv.Mat();
+      circleCenters=[];
+      cv.cvtColor(baseMat,gray,cv.COLOR_RGBA2GRAY);
+      cv.medianBlur(gray,gray,5);
+      cv.HoughCircles(gray,circles,cv.HOUGH_GRADIENT,1,25,100,30,10,40);
+      for(let i=0;i<circles.cols;i++){
+        let x=circles.data32F[i*3];
+        let y=circles.data32F[i*3+1];
+        circleCenters.push({x,y});
+      }
+      gray.delete(); circles.delete();
+      return circleCenters;
+    }
+
+    function generateAlignedGrid(N){
+      if(circleCenters.length===0) return;
+      let xs=circleCenters.map(s=>s.x);
+      let ys=circleCenters.map(s=>s.y);
+      let xmin=Math.min(...xs);
+      let xmax=Math.max(...xs);
+      let ymin=Math.min(...ys);
+      let ymax=Math.max(...ys);
+
+      let rowSpacing = (ymax - ymin)/(N-1);
+      let colSpacing = (xmax - xmin)/(N-1);
+
+      gridRows=[]; gridCols=[];
+      for(let i=0;i<N;i++){
+        gridRows.push(ymin + i*rowSpacing);
+        gridCols.push(xmin + i*colSpacing);
+      }
+
+      for(let s of circleCenters){
+        let nearestRow = gridRows.reduce((a,b)=>Math.abs(b-s.y)<Math.abs(a-s.y)?b:a);
+        let nearestCol = gridCols.reduce((a,b)=>Math.abs(b-s.x)<Math.abs(a-s.x)?b:a);
+        s.snapped = {x: nearestCol, y: nearestRow};
+      }
+    }
+
+    function drawAlignedGrid(){
+      if(!baseMat) return;
+      if(overlayMat) overlayMat.delete();
+      overlayMat=baseMat.clone();
+
+      let intersections=[];
+      let xmin = gridCols[0];
+      let xmax = gridCols[gridCols.length-1];
+      let ymin = gridRows[0];
+      let ymax = gridRows[gridRows.length-1];
+
+      for(let y of gridRows){
+        for(let x of gridCols){
+          intersections.push({x,y});
+          cv.circle(overlayMat,new cv.Point(x,y),3,new cv.Scalar(180,0,180,255),-1);
+        }
+      }
+
+      for(let y of gridRows)
+        cv.line(overlayMat,new cv.Point(xmin,y),new cv.Point(xmax,y),new cv.Scalar(0,255,0,255),1);
+      for(let x of gridCols)
+        cv.line(overlayMat,new cv.Point(x,ymin),new cv.Point(x,ymax),new cv.Scalar(0,0,255,255),1);
+
+      for(let s of circleCenters){
+        let pt = s.snapped || s;
+        cv.circle(overlayMat,new cv.Point(pt.x,pt.y),10,new cv.Scalar(255,0,0,255),2);
+      }
+
+      cv.imshow("canvas", overlayMat);
+      updateOutput(gridRows.length, gridCols.length, circleCenters.length, intersections.length);
+    }
+
+    function detectBoard(){
+      detectStones();
+      if(circleCenters.length===0) return;
+      generateAlignedGrid(gridSize);
+      drawAlignedGrid();
+    }
+
+    window.addEventListener("resize",()=>{
+      if(!sourceImage || !baseMat) return;
+      drawImage(sourceImage);
+      let resized=cv.imread(canvas);
+      cv.resize(baseMat,resized,resized.size());
+      baseMat.delete(); baseMat=resized;
+      if(overlayMat) overlayMat.delete();
+      overlayMat = baseMat.clone();
+      cv.imshow("canvas", overlayMat);
+    });
+  </script>
+
 </body>
 </html>
