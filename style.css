@@ -1,0 +1,79 @@
+/* General body and font */
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  background: #f2f2f2;
+  color: #333;
+}
+
+/* Navigation bar */
+nav {
+  background: #0088cc;
+  padding: 10px 20px;
+  display: flex;
+  gap: 20px;
+}
+nav a {
+  color: #fff;
+  text-decoration: none;
+  font-weight: bold;
+}
+nav a:hover {
+  text-decoration: underline;
+}
+
+/* Headings */
+h1 {
+  margin: 20px;
+}
+
+/* Container for buttons */
+.container, .controls {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  margin: 20px;
+  gap: 10px;
+}
+
+/* Buttons */
+.project-button, button {
+  display: block;
+  width: 100%;
+  max-width: 400px;
+  padding: 12px 20px;
+  font-size: 1em;
+  text-align: left;
+  border: none;
+  border-radius: 6px;
+  background: #0088cc;
+  color: #fff;
+  cursor: pointer;
+  text-decoration: none;
+}
+.project-button:hover, button:hover {
+  background: #005f99;
+}
+
+/* Canvas */
+canvas {
+  display: block;
+  margin: 20px auto;
+  border: 1px solid #333;
+  background: #fff;
+}
+
+/* Output boxes */
+#output {
+  margin: 0 20px 20px 20px;
+  padding: 6px;
+  background: #fff;
+  border: 1px solid #999;
+  font-size: 14px;
+}
+
+/* Footer */
+footer {
+  margin: 40px 20px;
+  color: #888;
+}
